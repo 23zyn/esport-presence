@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Team Presence</title>
+<style>
+:root{--bg:#090c12;--panel:#111722;--panel2:#171e2b;--line:#293346;--text:#eef2f8;--muted:#8d98aa;--accent:#7657ff;--green:#35d07f;--red:#ff5d73;--yellow:#f4c34f}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#191530,#090c12 48%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1250px;margin:auto;padding:28px 18px 50px}
+.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}.brand{display:flex;gap:12px;align-items:center}.logo{width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#7657ff,#bd45ff);display:grid;place-items:center;font-weight:900}.title{font-size:24px;font-weight:800}.sub{color:var(--muted);font-size:13px;margin-top:3px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:10px 13px;border-radius:9px;cursor:pointer;font-weight:700}.btn:hover{background:var(--panel2)}.primary{background:var(--accent);border-color:var(--accent)}
+.week{display:flex;justify-content:space-between;align-items:center;background:#111722e8;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}.week strong{font-size:17px}.week span{color:var(--muted);font-size:13px}.status{font-size:12px;color:var(--green);margin-left:8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}.stat b{font-size:21px}.stat small{display:block;color:var(--muted);margin-top:3px}
+.tablebox{overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}table{border-collapse:collapse;width:100%;min-width:900px}th,td{border-bottom:1px solid var(--line);padding:10px;text-align:center}th{background:#151c28;color:#aeb7c6;font-size:12px;text-transform:uppercase;letter-spacing:.04em}td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:#111722;z-index:2}.player{font-weight:750;min-width:180px}.remove{border:0;background:none;color:#667184;cursor:pointer;margin-left:6px;font-size:16px}.remove:hover{color:var(--red)}.cell{width:42px;height:38px;border-radius:9px;border:1px solid var(--line);background:#0d131c;color:#697589;cursor:pointer;font-weight:900;font-size:16px}.cell.yes{background:#35d07f22;border-color:#35d07f88;color:var(--green)}.cell.no{background:#ff5d7320;border-color:#ff5d7377;color:var(--red)}.cell.maybe{background:#f4c34f20;border-color:#f4c34f77;color:var(--yellow)}
+.legend{display:flex;gap:15px;flex-wrap:wrap;padding:14px;color:var(--muted);font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}.g{background:var(--green)}.r{background:var(--red)}.y{background:var(--yellow)}.empty{padding:35px;text-align:center;color:var(--muted)}.footer{color:#667184;font-size:12px;margin-top:12px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);padding:20px;max-width:360px;width:calc(100% - 30px)}dialog::backdrop{background:#000b}input{width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);background:#0b1018;color:var(--text);margin:10px 0 14px}
+@media(max-width:700px){.top{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.week{align-items:flex-start;gap:8px;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div class="brand"><div class="logo">GG</div><div><div class="title">Team Presence</div><div class="sub">Közös e-sport heti jelenléti rendszer</div></div></div>
+<div class="actions"><button class="btn" id="prev">← Előző hét</button><button class="btn" id="next">Következő hét →</button><button class="btn primary" id="add">+ Játékos</button><button class="btn" id="reset">Hét ürítése</button></div></div>
+<div class="week"><strong id="weekTitle"></strong><span id="status">Kapcsolódás…</span></div>
+<div class="stats"><div class="stat"><b id="players">0</b><small>Játékos</small></div><div class="stat"><b id="available">0</b><small>Ma elérhető</small></div><div class="stat"><b id="full">0</b><small>Teljes héten elérhető</small></div><div class="stat"><b id="unknown">0</b><small>Hiányzó válasz</small></div></div>
+<div class="tablebox" id="table"></div>
+<div class="legend"><span><i class="dot g"></i>Jön</span><span><i class="dot r"></i>Nem jön</span><span><i class="dot y"></i>Bizonytalan</span><span>💡 Kattints egy cellára az állapot váltásához.</span></div>
+<div class="footer">A módosítások közös Firebase adatbázisba kerülnek.</div>
+</div>
+<dialog id="dlg"><form id="playerForm"><b>Új játékos</b><input id="name" placeholder="Játékos neve" maxlength="30" autocomplete="off" required><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" type="button" id="cancelName">Mégse</button><button class="btn primary" type="submit">Hozzáadás</button></div></form></dialog>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+
+const firebaseConfig={
+ apiKey:"AIzaSyAuRegHmJ_IhqT0g3Ayq5Vr6NyzDLFi0EY",
+ authDomain:"esport-72a74.firebaseapp.com",
+ databaseURL:"https://esport-presence-default-rtdb.europe-west1.firebasedatabase.app/",
+ projectId:"esport-72a74",
+ storageBucket:"esport-72a74.firebasestorage.app",
+ messagingSenderId:"880976560177",
+ appId:"1:880976560177:web:1f62dc532f887705d5d510",
+ measurementId:"G-NHZYDEWPLB"
+};
+const app=initializeApp(firebaseConfig), db=getDatabase(app);
+const root=ref(db,"teamPresence");
+let state={players:[],weeks:{}},weekOffset=0;
+
+const days=["Hétfő","Kedd","Szerda","Csütörtök","Péntek","Szombat","Vasárnap"];
+const $=id=>document.getElementById(id);
+function weekKey(){let d=new Date();d.setDate(d.getDate()+weekOffset*7);let day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
+function weekDates(){let d=new Date(weekKey()+"T12:00:00");return days.map((_,i)=>{let x=new Date(d);x.setDate(d.getDate()+i);return x})}
+function save(){set(root,state).catch(e=>{$("status").textContent="Hiba a mentésnél";console.error(e)})}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function render(){
+ const ds=weekDates(),k=weekKey(), w=state.weeks?.[k]||{};
+ $("weekTitle").textContent=`${ds[0].toLocaleDateString("hu-HU",{month:"long",day:"numeric"})} – ${ds[6].toLocaleDateString("hu-HU",{month:"long",day:"numeric",year:"numeric"})}`;
+ let html="<table><thead><tr><th>Játékos</th>"+days.map((d,i)=>`<th>${d}<br><small>${ds[i].getDate()}.</small></th>`).join("")+"</tr></thead><tbody>";
+ if(!state.players.length) html+='<tr><td colspan="8" class="empty">Még nincs játékos. Kattints a „+ Játékos” gombra.</td></tr>';
+ state.players.forEach((p,pi)=>{html+=`<tr><td class="player">${esc(p)} <button class="remove" title="Törlés" data-remove="${pi}">×</button></td>`;
+ days.forEach((_,di)=>{let v=w[p]?.[di]||"";let icon=v==="yes"?"✓":v==="no"?"×":v==="maybe"?"?":"—";html+=`<td><button class="cell ${v}" data-p="${pi}" data-d="${di}">${icon}</button></td>`});html+="</tr>"});
+ html+="</tbody></table>";$("table").innerHTML=html;
+ document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>cycle(+b.dataset.p,+b.dataset.d));
+ document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>removePlayer(+b.dataset.remove));
+ let today=new Date(),dow=(today.getDay()+6)%7,avail=state.players.filter(p=>w[p]?.[dow]==="yes").length;
+ let full=state.players.filter(p=>days.every((_,i)=>w[p]?.[i]==="yes")).length;
+ let unknown=state.players.reduce((n,p)=>n+days.filter((_,i)=>!w[p]?.[i]).length,0);
+ $("players").textContent=state.players.length;$("available").textContent=weekOffset===0?avail:"–";$("full").textContent=full;$("unknown").textContent=unknown;
+}
+function cycle(pi,di){const k=weekKey(),p=state.players[pi];state.weeks??={};state.weeks[k]??={};state.weeks[k][p]??={};let v=state.weeks[k][p][di]||"";state.weeks[k][p][di]=v===""?"yes":v==="yes"?"no":v==="no"?"maybe":"";save()}
+function removePlayer(i){if(confirm(`Törlöd a játékost: ${state.players[i]}?`)){state.players.splice(i,1);save()}}
+$("prev").onclick=()=>{weekOffset--;render()};$("next").onclick=()=>{weekOffset++;render()};
+$("add").onclick=()=>{$("name").value="";$("dlg").showModal();setTimeout(()=>$("name").focus(),50)};
+$("cancelName").onclick=()=>$("dlg").close();
+$("playerForm").addEventListener("submit",e=>{e.preventDefault();const n=$("name").value.trim().replace(/[.#$\[\]\/]/g,"");if(!n)return;if(state.players.includes(n)){alert("Ez a játékos már szerepel.");return}state.players.push(n);$("dlg").close();render();save()});
+$("reset").onclick=()=>{if(confirm("Üríted az aktuális hét minden jelenléti adatát?")){if(state.weeks)delete state.weeks[weekKey()];save()}};
+onValue(root,snap=>{state=snap.val()||{players:[],weeks:{}};state.players??=[];state.weeks??={};$("status").textContent="● Online";render()},err=>{$("status").textContent="Nincs hozzáférés";console.error(err)});
+</script>
+</body>
+</html>
